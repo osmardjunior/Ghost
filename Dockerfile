@@ -1,31 +1,23 @@
 # syntax=docker/dockerfile:1.4
 ARG NODE_VERSION=22.18.0
 
-# ---- Runtime / Runner Stage ----
-# Baseado em Debian Bookworm Slim, seguro e leve.
-FROM node:${NODE_VERSION}-bookworm-slim AS runner
+# ---- Build Stage ----
+# Esta fase contem as ferramentas de compilacao para rodar e reconstruir modulos nativos
+FROM node:${NODE_VERSION}-bookworm-slim AS builder
 
-ENV NODE_ENV=production
+WORKDIR /src
 
-# Instala apenas dependencias de execucao (jemalloc para performance e fontconfig para fontes)
+# Instala ferramentas essenciais de compilacao para modulos nativos (ex: sharp, sqlite3)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libjemalloc2 fontconfig && \
+    apt-get install -y --no-install-recommends build-essential python3 git && \
     rm -rf /var/lib/apt/lists/*
 
-# Configura o usuario e grupo 'ghost' para rodar a aplicacao com privilegios reduzidos
-RUN groupmod -g 1001 node && \
-    usermod -u 1001 node && \
-    adduser --disabled-password --gecos "" -u 1000 ghost
-
-WORKDIR /home/ghost
-
-# Habilita o corepack para gerenciar o pnpm
 RUN corepack enable
 
-# Copia as configuracoes de workspace do pnpm
+# Copia os arquivos de definicao do workspace do pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Copia os package.json das dependencias internas do monorepo necessarias para o Ghost Core
+# Copia apenas as dependencias internas do monorepo necessarias
 COPY ghost/core/package.json ./ghost/core/
 COPY ghost/i18n/package.json ./ghost/i18n/
 COPY ghost/parse-email-address/package.json ./ghost/parse-email-address/
@@ -34,17 +26,39 @@ COPY ghost/parse-email-address/package.json ./ghost/parse-email-address/
 COPY .github/scripts ./.github/scripts
 COPY .github/hooks ./.github/hooks
 
-# Instala apenas as dependencias de producao na pasta (/root/.local/share/pnpm/store)
+# Instala as dependencias de producao e compila os modulos nativos
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
-    pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
+    pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts && \
+    pnpm rebuild
 
-# Compila apenas as dependencias nativas de producao
-RUN pnpm rebuild
 
-# Copia todo o repositorio (incluindo os assets ja compilados localmente em ghost/core/core/built/admin)
+# ---- Runtime Stage ----
+# Imagem final de execucao, limpa e sem ferramentas de compilacao
+FROM node:${NODE_VERSION}-bookworm-slim AS runner
+
+ENV NODE_ENV=production
+
+# Instala jemalloc e fontconfig
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libjemalloc2 fontconfig && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupmod -g 1001 node && \
+    usermod -u 1001 node && \
+    adduser --disabled-password --gecos "" -u 1000 ghost
+
+WORKDIR /home/ghost
+
+RUN corepack enable
+
+# Copia as dependencias ja instaladas e compiladas da fase anterior
+COPY --from=builder /src /home/ghost
+
+# Copia todo o repositorio (os assets prontos do admin e outros arquivos)
+# Como o node_modules esta no .dockerignore, ele nao sobrescrevera a pasta gerada acima
 COPY . .
 
-# Prepara a pasta de conteudos padrao (Casper e Source) e da permissao ao usuario ghost
+# Prepara os diretorios de conteudo padrao
 RUN mkdir -p default log && \
     cp -R ghost/core/content base_content && \
     cp -R ghost/core/content/themes/casper default/casper && \
@@ -53,8 +67,7 @@ RUN mkdir -p default log && \
     chown -R nobody:nogroup /home/ghost/* && \
     chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log
 
-# Redireciona os Apps Publicos (Portal, Comments, etc.) para carregar localmente caso estejam no build
-# Se nao estiverem no build, remova ou comente estas linhas para usar a CDN padrao do Ghost
+# Carrega os apps publicos localmente caso existam no build
 ENV portal__url=/ghost/assets/portal/portal.min.js \
     comments__url=/ghost/assets/comments-ui/comments-ui.min.js \
     sodoSearch__url=/ghost/assets/sodo-search/sodo-search.min.js \
