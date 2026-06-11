@@ -1,0 +1,60 @@
+name: ghost-production
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ghost-prod-mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
+      MYSQL_DATABASE: ${DATABASE_NAME:-ghost_production}
+      MYSQL_USER: ${DATABASE_USER:-ghost}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-ghost_password_change_me}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DATABASE_USER:-ghost}", "-p${DATABASE_PASSWORD:-ghost_password_change_me}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ghost:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ghost-prod-app
+    restart: unless-stopped
+    ports:
+      - "2368:2368"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ghost-content:/home/ghost/content
+    environment:
+      # Production URL - MUST be set to your public domain
+      url: ${GHOST_URL:-http://localhost:2368}
+      NODE_ENV: production
+      
+      # Database Configuration
+      database__client: mysql2
+      database__connection__host: mysql
+      database__connection__user: ${DATABASE_USER:-ghost}
+      database__connection__password: ${DATABASE_PASSWORD:-ghost_password_change_me}
+      database__connection__database: ${DATABASE_NAME:-ghost_production}
+      
+      # Server configuration
+      server__host: 0.0.0.0
+      server__port: 2368
+
+      # Mail Configuration (Example: SMTP)
+      mail__transport: ${MAIL_TRANSPORT:-Direct}
+      mail__options__host: ${MAIL_HOST:-}
+      mail__options__port: ${MAIL_PORT:-}
+      mail__options__auth__user: ${MAIL_USER:-}
+      mail__options__auth__pass: ${MAIL_PASSWORD:-}
+
+volumes:
+  mysql-data:
+  ghost-content:
