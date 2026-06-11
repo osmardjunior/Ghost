@@ -42,7 +42,10 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
 # Imagem final de execucao, limpa e sem ferramentas de compilacao
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    url=http://localhost:2368 \
+    server__host=0.0.0.0 \
+    server__port=2368
 
 # Instala jemalloc e fontconfig
 RUN apt-get update && \
@@ -65,13 +68,12 @@ COPY --from=builder /src /home/ghost
 COPY . .
 
 # Prepara os diretorios de conteudo padrao
+# Evita chown -R em todo /home/ghost (muito lento por causa do node_modules)
 RUN mkdir -p default log && \
     cp -R ghost/core/content base_content && \
     cp -R ghost/core/content/themes/casper default/casper && \
     ([ -d ghost/core/content/themes/source ] && cp -R ghost/core/content/themes/source default/source || true) && \
-    chown ghost:ghost /home/ghost && \
-    chown -R nobody:nogroup /home/ghost/* && \
-    chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log
+    chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log /home/ghost/default /home/ghost/base_content
 
 # Carrega os apps publicos localmente caso existam no build
 ENV portal__url=/ghost/assets/portal/portal.min.js \
