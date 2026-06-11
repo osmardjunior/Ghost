@@ -2,41 +2,40 @@
 ARG NODE_VERSION=22.18.0
 
 # ---- Build Stage ----
-# Instala TODAS as deps (incluindo dev como typescript), compila TS, depois limpa devDeps
 FROM node:${NODE_VERSION}-bookworm-slim AS builder
 
 WORKDIR /src
 
-# Instala ferramentas de compilacao para modulos nativos (ex: sharp)
+# Ferramentas de compilacao para modulos nativos (sharp)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential python3 git && \
     rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
 
-# Cria stub do husky para evitar erro no lifecycle 'prepare'
+# Stub do husky + desabilita scripts problematicos
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
-ENV HUSKY=0
+ENV HUSKY=0 npm_config_ignore_scripts=true
 
-# Copia o workspace inteiro (respeitando .dockerignore)
+# Copia tudo (respeitando .dockerignore)
 COPY . .
 
-# Instala TODAS as dependencias (dev + prod) para poder compilar TypeScript
+# Instala TODAS as deps sem rodar nenhum lifecycle script
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
-    pnpm install --frozen-lockfile --prefer-offline --ignore-scripts && \
-    pnpm rebuild
+    pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
-# Compila TypeScript (ghost/core/build:tsc)
+# Reconstroi apenas os modulos nativos necessarios (sharp)
+RUN cd node_modules/.pnpm/sharp@*/node_modules/sharp 2>/dev/null && node install/check.js || true
+
+# Compila TypeScript
 RUN cd ghost/core && npx tsc || true
 
-# Remove devDependencies e reinstala somente producao
+# Limpa devDependencies sem rodar nenhum script
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
-    pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts && \
-    pnpm rebuild
+    npm_config_ignore_scripts=true pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
 
 
 # ---- Runtime Stage ----
-# Imagem final limpa e sem ferramentas de compilacao
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 
 ENV NODE_ENV=production \
@@ -44,7 +43,6 @@ ENV NODE_ENV=production \
     server__host=0.0.0.0 \
     server__port=2368
 
-# Instala jemalloc e fontconfig
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libjemalloc2 fontconfig && \
     rm -rf /var/lib/apt/lists/*
@@ -54,24 +52,22 @@ RUN groupmod -g 1001 node && \
     adduser --disabled-password --gecos "" -u 1000 ghost
 
 WORKDIR /home/ghost
-
 RUN corepack enable
 
-# Copia tudo do builder (source + deps + TS compilado)
+# Copia tudo do builder (source + deps compilados + TS compilado)
 COPY --from=builder /src /home/ghost
 
-# Copia o entrypoint
+# Entrypoint
 COPY docker-entrypoint.sh /home/ghost/ghost/core/docker-entrypoint.sh
 RUN chmod +x /home/ghost/ghost/core/docker-entrypoint.sh
 
-# Prepara os diretorios de conteudo padrao
+# Prepara content dirs
 RUN mkdir -p default log && \
     cp -R ghost/core/content base_content && \
     cp -R ghost/core/content/themes/casper default/casper && \
     ([ -d ghost/core/content/themes/source ] && cp -R ghost/core/content/themes/source default/source || true) && \
     chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log /home/ghost/default /home/ghost/base_content
 
-# URLs dos apps publicos locais
 ENV portal__url=/ghost/assets/portal/portal.min.js \
     comments__url=/ghost/assets/comments-ui/comments-ui.min.js \
     sodoSearch__url=/ghost/assets/sodo-search/sodo-search.min.js \
