@@ -31,7 +31,7 @@ services:
       mysql:
         condition: service_healthy
     volumes:
-      - ghost-content:/home/ghost/content
+      - ghost-content:/home/ghost/ghost/core/content
     environment:
       # Production URL - MUST be set to your public domain
       url: ${GHOST_URL:-http://localhost:2368}
@@ -47,6 +47,9 @@ services:
       # Server configuration
       server__host: 0.0.0.0
       server__port: 2368
+
+      # Logging para debug
+      logging__level: info
 
       # Mail Configuration (Example: SMTP)
       mail__transport: ${MAIL_TRANSPORT:-Direct}
