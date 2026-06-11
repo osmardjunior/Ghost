@@ -26,6 +26,12 @@ COPY ghost/parse-email-address/package.json ./ghost/parse-email-address/
 COPY .github/scripts ./.github/scripts
 COPY .github/hooks ./.github/hooks
 
+# Desabilita husky (devDependency) e scripts de lifecycle que nao funcionam em prod
+ENV HUSKY=0
+
+# Cria um stub do husky (devDependency ausente em prod) para evitar erro no lifecycle 'prepare'
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
+
 # Instala as dependencias de producao e compila os modulos nativos
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
     pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts && \
