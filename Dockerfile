@@ -30,6 +30,10 @@ COPY ghost/core/package.json ./ghost/core/
 COPY ghost/i18n/package.json ./ghost/i18n/
 COPY ghost/parse-email-address/package.json ./ghost/parse-email-address/
 
+# Copia scripts de ciclo de vida do pnpm
+COPY .github/scripts ./.github/scripts
+COPY .github/hooks ./.github/hooks
+
 # Instala apenas as dependencias de producao na pasta (/root/.local/share/pnpm/store)
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
     pnpm install --prod --frozen-lockfile --prefer-offline
