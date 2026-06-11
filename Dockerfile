@@ -30,10 +30,6 @@ RUN cd node_modules/.pnpm/sharp@*/node_modules/sharp 2>/dev/null && node install
 # Compila TypeScript
 RUN cd ghost/core && npx tsc || true
 
-# Limpa devDependencies sem rodar nenhum script
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
-    npm_config_ignore_scripts=true pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
-
 
 # ---- Runtime Stage ----
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
