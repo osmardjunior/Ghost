@@ -13,30 +13,20 @@ RUN apt-get update && \
 
 RUN corepack enable
 
-# Stub do husky + desabilita scripts problematicos
+# Stub do husky
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
-ENV HUSKY=0 npm_config_ignore_scripts=true
+ENV HUSKY=0
 
 # Copia tudo (respeitando .dockerignore)
 COPY . .
 
-# Instala TODAS as deps sem rodar nenhum lifecycle script
+# Instala TODAS as deps sem lifecycle scripts
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
     pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
-# Reconstroi apenas os modulos nativos necessarios (sharp)
-RUN cd node_modules/.pnpm/sharp@*/node_modules/sharp 2>/dev/null && node install/check.js || true
+# Build completo via Nx (compila TS, admin, apps publicas - tudo na ordem certa)
+RUN npx nx run-many --target=build --projects=ghost/core,ghost/parse-email-address,ghost/admin --parallel=false || true
 
-# Compila TypeScript - parse-email-address primeiro (dependencia do core)
-RUN cd ghost/parse-email-address && npx tsc || true
-RUN cd ghost/core && npx tsc || true
-
-# Compila o Admin UI (Ember) - necessario para /ghost/ funcionar
-# Desabilita temporariamente ignore_scripts para o ember-cli funcionar
-RUN npm_config_ignore_scripts= cd ghost/admin && npx ember build --environment=production --silent || \
-    (echo "Admin build failed, creating placeholder..." && \
-     mkdir -p /src/ghost/core/core/built/admin && \
-     echo '<html><head><meta http-equiv="refresh" content="0;url=/"></head><body>Admin build pending</body></html>' > /src/ghost/core/core/built/admin/index.html)
 
 # ---- Runtime Stage ----
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
@@ -57,7 +47,7 @@ RUN groupmod -g 1001 node && \
 WORKDIR /home/ghost
 RUN corepack enable
 
-# Copia tudo do builder (source + deps compilados + TS compilado)
+# Copia tudo do builder
 COPY --from=builder /src /home/ghost
 
 # Entrypoint
@@ -70,14 +60,6 @@ RUN mkdir -p default log && \
     cp -R ghost/core/content/themes/casper default/casper && \
     ([ -d ghost/core/content/themes/source ] && cp -R ghost/core/content/themes/source default/source || true) && \
     chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log /home/ghost/default /home/ghost/base_content
-
-ENV portal__url=/ghost/assets/portal/portal.min.js \
-    comments__url=/ghost/assets/comments-ui/comments-ui.min.js \
-    sodoSearch__url=/ghost/assets/sodo-search/sodo-search.min.js \
-    sodoSearch__styles=/ghost/assets/sodo-search/main.css \
-    signupForm__url=/ghost/assets/signup-form/signup-form.min.js \
-    announcementBar__url=/ghost/assets/announcement-bar/announcement-bar.min.js \
-    adminToolbar__url=/ghost/assets/admin-toolbar/admin-toolbar.min.js
 
 WORKDIR /home/ghost/ghost/core
 
