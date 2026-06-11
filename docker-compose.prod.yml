@@ -48,8 +48,9 @@ services:
       server__host: 0.0.0.0
       server__port: 2368
 
-      # Logging para debug
+      # Logging - stdout para que Dokploy veja os logs
       logging__level: info
+      logging__transports: '["stdout"]'
 
       # Mail Configuration (Example: SMTP)
       mail__transport: ${MAIL_TRANSPORT:-Direct}

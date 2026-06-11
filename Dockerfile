@@ -86,9 +86,13 @@ ENV portal__url=/ghost/assets/portal/portal.min.js \
 
 WORKDIR /home/ghost/ghost/core
 
+# Copia o entrypoint que inicializa o content dir
+COPY docker-entrypoint.sh /home/ghost/ghost/core/docker-entrypoint.sh
+RUN chmod +x /home/ghost/ghost/core/docker-entrypoint.sh
+
 USER ghost
 ENV LD_PRELOAD=libjemalloc.so.2
 
 EXPOSE 2368
 
-CMD ["node", "index.js"]
+CMD ["/home/ghost/ghost/core/docker-entrypoint.sh"]
