@@ -27,7 +27,8 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
 # Reconstroi apenas os modulos nativos necessarios (sharp)
 RUN cd node_modules/.pnpm/sharp@*/node_modules/sharp 2>/dev/null && node install/check.js || true
 
-# Compila TypeScript
+# Compila TypeScript - parse-email-address primeiro (dependencia do core)
+RUN cd ghost/parse-email-address && npx tsc || true
 RUN cd ghost/core && npx tsc || true
 
 
