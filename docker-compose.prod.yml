@@ -33,8 +33,8 @@ services:
     volumes:
       - ghost-content:/home/ghost/ghost/core/content
     environment:
-      # Production URL - MUST be set to your public domain
-      url: ${GHOST_URL:-http://localhost:2368}
+      # Production URL - DEVE usar https:// se acessado via Cloudflare Tunnel
+      url: ${GHOST_URL:-https://localhost:2368}
       NODE_ENV: production
       
       # Database Configuration
@@ -47,6 +47,9 @@ services:
       # Server configuration
       server__host: 0.0.0.0
       server__port: 2368
+
+      # Trust proxy (Cloudflare Tunnel) - necessario para cookies HTTPS funcionarem
+      adapt__trustProxy: "true"
 
       # Logging - stdout para que Dokploy veja os logs
       logging__level: info
