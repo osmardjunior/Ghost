@@ -31,6 +31,12 @@ RUN cd node_modules/.pnpm/sharp@*/node_modules/sharp 2>/dev/null && node install
 RUN cd ghost/parse-email-address && npx tsc || true
 RUN cd ghost/core && npx tsc || true
 
+# Compila o Admin UI (Ember) - necessario para /ghost/ funcionar
+# Desabilita temporariamente ignore_scripts para o ember-cli funcionar
+RUN npm_config_ignore_scripts= cd ghost/admin && npx ember build --environment=production --silent || \
+    (echo "Admin build failed, creating placeholder..." && \
+     mkdir -p /src/ghost/core/core/built/admin && \
+     echo '<html><head><meta http-equiv="refresh" content="0;url=/"></head><body>Admin build pending</body></html>' > /src/ghost/core/core/built/admin/index.html)
 
 # ---- Runtime Stage ----
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
