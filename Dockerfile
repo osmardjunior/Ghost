@@ -2,44 +2,41 @@
 ARG NODE_VERSION=22.18.0
 
 # ---- Build Stage ----
-# Esta fase contem as ferramentas de compilacao para rodar e reconstruir modulos nativos
+# Instala TODAS as deps (incluindo dev como typescript), compila TS, depois limpa devDeps
 FROM node:${NODE_VERSION}-bookworm-slim AS builder
 
 WORKDIR /src
 
-# Instala ferramentas essenciais de compilacao para modulos nativos (ex: sharp, sqlite3)
+# Instala ferramentas de compilacao para modulos nativos (ex: sharp)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential python3 git && \
     rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
 
-# Copia os arquivos de definicao do workspace do pnpm
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Copia apenas as dependencias internas do monorepo necessarias
-COPY ghost/core/package.json ./ghost/core/
-COPY ghost/i18n/package.json ./ghost/i18n/
-COPY ghost/parse-email-address/package.json ./ghost/parse-email-address/
-
-# Copia scripts de ciclo de vida do pnpm
-COPY .github/scripts ./.github/scripts
-COPY .github/hooks ./.github/hooks
-
-# Desabilita husky (devDependency) e scripts de lifecycle que nao funcionam em prod
+# Cria stub do husky para evitar erro no lifecycle 'prepare'
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
 ENV HUSKY=0
 
-# Cria um stub do husky (devDependency ausente em prod) para evitar erro no lifecycle 'prepare'
-RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
+# Copia o workspace inteiro (respeitando .dockerignore)
+COPY . .
 
-# Instala as dependencias de producao e compila os modulos nativos
+# Instala TODAS as dependencias (dev + prod) para poder compilar TypeScript
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
+    pnpm install --frozen-lockfile --prefer-offline --ignore-scripts && \
+    pnpm rebuild
+
+# Compila TypeScript (ghost/core/build:tsc)
+RUN cd ghost/core && npx tsc || true
+
+# Remove devDependencies e reinstala somente producao
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
     pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts && \
     pnpm rebuild
 
 
 # ---- Runtime Stage ----
-# Imagem final de execucao, limpa e sem ferramentas de compilacao
+# Imagem final limpa e sem ferramentas de compilacao
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 
 ENV NODE_ENV=production \
@@ -60,22 +57,21 @@ WORKDIR /home/ghost
 
 RUN corepack enable
 
-# Copia as dependencias ja instaladas e compiladas da fase anterior
+# Copia tudo do builder (source + deps + TS compilado)
 COPY --from=builder /src /home/ghost
 
-# Copia todo o repositorio (os assets prontos do admin e outros arquivos)
-# Como o node_modules esta no .dockerignore, ele nao sobrescrevera a pasta gerada acima
-COPY . .
+# Copia o entrypoint
+COPY docker-entrypoint.sh /home/ghost/ghost/core/docker-entrypoint.sh
+RUN chmod +x /home/ghost/ghost/core/docker-entrypoint.sh
 
 # Prepara os diretorios de conteudo padrao
-# Evita chown -R em todo /home/ghost (muito lento por causa do node_modules)
 RUN mkdir -p default log && \
     cp -R ghost/core/content base_content && \
     cp -R ghost/core/content/themes/casper default/casper && \
     ([ -d ghost/core/content/themes/source ] && cp -R ghost/core/content/themes/source default/source || true) && \
     chown -R ghost:ghost /home/ghost/ghost/core/content /home/ghost/log /home/ghost/default /home/ghost/base_content
 
-# Carrega os apps publicos localmente caso existam no build
+# URLs dos apps publicos locais
 ENV portal__url=/ghost/assets/portal/portal.min.js \
     comments__url=/ghost/assets/comments-ui/comments-ui.min.js \
     sodoSearch__url=/ghost/assets/sodo-search/sodo-search.min.js \
@@ -85,10 +81,6 @@ ENV portal__url=/ghost/assets/portal/portal.min.js \
     adminToolbar__url=/ghost/assets/admin-toolbar/admin-toolbar.min.js
 
 WORKDIR /home/ghost/ghost/core
-
-# Copia o entrypoint que inicializa o content dir
-COPY docker-entrypoint.sh /home/ghost/ghost/core/docker-entrypoint.sh
-RUN chmod +x /home/ghost/ghost/core/docker-entrypoint.sh
 
 USER ghost
 ENV LD_PRELOAD=libjemalloc.so.2
