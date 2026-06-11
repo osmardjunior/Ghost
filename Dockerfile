@@ -36,7 +36,10 @@ COPY .github/hooks ./.github/hooks
 
 # Instala apenas as dependencias de producao na pasta (/root/.local/share/pnpm/store)
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm-store \
-    pnpm install --prod --frozen-lockfile --prefer-offline
+    pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
+
+# Compila apenas as dependencias nativas de producao
+RUN pnpm rebuild
 
 # Copia todo o repositorio (incluindo os assets ja compilados localmente em ghost/core/core/built/admin)
 COPY . .
