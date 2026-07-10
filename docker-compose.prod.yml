@@ -35,6 +35,10 @@ services:
     environment:
       # Production URL - DEVE usar https:// se acessado via Cloudflare Tunnel
       url: ${GHOST_URL:-https://localhost:2368}
+      # Admin URL - Docker Compose nao suporta substituicao aninhada (${A:-${B}})
+      # Defina GHOST_ADMIN_URL no Dokploy se o admin for em dominio diferente,
+      # caso contrario deixe igual ao GHOST_URL
+      admin__url: ${GHOST_ADMIN_URL:-https://localhost:2368}
       NODE_ENV: production
       
       # Database Configuration
@@ -48,8 +52,20 @@ services:
       server__host: 0.0.0.0
       server__port: 2368
 
-      # Trust proxy (Cloudflare Tunnel) - necessario para cookies HTTPS funcionarem
+      # Trust proxy (Cloudflare Tunnel + Traefik/Dokploy)
+      # Cloudflare termina TLS na borda e encaminha como HTTP internamente.
+      # "true" faz o Express confiar em X-Forwarded-For e X-Forwarded-Proto
       adapt__trustProxy: "true"
+
+      # Cookie - Cloudflare Tunnel precisa de SameSite=none APENAS se admin estiver
+      # em dominio diferente do site. Se for o mesmo dominio, lax funciona.
+      session__secure: "true"
+      session__sameSite: lax
+
+      # Cloudflare envia o scheme real via CF-Visitor: {"scheme":"https"}
+      # O Express com trustProxy usa X-Forwarded-Proto que o Cloudflare tambem seta
+      # Garante que o Ghost saiba que requests chegam como HTTPS
+      server__trustedProxies: "loopback, linklocal, uniquelocal"
 
       # Logging - stdout para que Dokploy veja os logs
       logging__level: info
