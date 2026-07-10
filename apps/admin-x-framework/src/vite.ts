@@ -21,7 +21,10 @@ const externalPlugin = ({externals}: { externals: Record<string, string> }): Plu
             if (originalId) {
                 const module = await import(originalId);
 
-                return Object.keys(module).map(key => (key === 'default' ? `export default ${externalName};` : `export const ${key} = ${externalName}.${key};`)).join('\n');
+                return Object.keys(module)
+                    .filter(key => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key))
+                    .map(key => (key === 'default' ? `export default ${externalName};` : `export const ${key} = ${externalName}.${key};`))
+                    .join('\n');
             }
         }
     };
