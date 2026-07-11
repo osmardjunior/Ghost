@@ -61,7 +61,7 @@ services:
       # Cookie - Cloudflare Tunnel precisa de SameSite=none APENAS se admin estiver
       # em dominio diferente do site. Se for o mesmo dominio, lax funciona.
       session__secure: "true"
-      session__sameSite: lax
+      session__sameSite: none
 
       # Cloudflare envia o scheme real via CF-Visitor: {"scheme":"https"}
       # O Express com trustProxy usa X-Forwarded-Proto que o Cloudflare tambem seta
