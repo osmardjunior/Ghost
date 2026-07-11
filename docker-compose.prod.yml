@@ -69,8 +69,11 @@ services:
       server__trustedProxies: "loopback, linklocal, uniquelocal"
 
       # Logging - stdout para que Dokploy veja os logs
-      logging__level: info
+      logging__level: ${GHOST_LOGGING_LEVEL:-info}
       logging__transports: '["stdout"]'
+
+      # Debug - Ative logs internos detalhados passando a variavel DEBUG no Dokploy
+      DEBUG: ${DEBUG:-}
 
       # Mail Configuration (Example: SMTP)
       mail__from: ${MAIL_FROM:-}
