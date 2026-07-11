@@ -56,6 +56,7 @@ services:
       # Cloudflare termina TLS na borda e encaminha como HTTP internamente.
       # "true" faz o Express confiar em X-Forwarded-For e X-Forwarded-Proto
       adapt__trustProxy: "true"
+      security__staffDeviceVerification: ${SECURITY_STAFF_DEVICE_VERIFICATION:-false}
 
       # Cookie - Cloudflare Tunnel precisa de SameSite=none APENAS se admin estiver
       # em dominio diferente do site. Se for o mesmo dominio, lax funciona.
