@@ -27,12 +27,6 @@ services:
     restart: unless-stopped
     ports:
       - "2368:2368"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ghost-router.rule=Host(`blog.obrinha.com`)"
-      - "traefik.http.routers.ghost-router.entrypoints=web,websecure"
-      - "traefik.http.middlewares.force-https-header.headers.customrequestheaders.X-Forwarded-Proto=https"
-      - "traefik.http.routers.ghost-router.middlewares=force-https-header"
     depends_on:
       mysql:
         condition: service_healthy
