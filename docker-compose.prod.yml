@@ -72,6 +72,7 @@ services:
       logging__transports: '["stdout"]'
 
       # Mail Configuration (Example: SMTP)
+      mail__from: ${MAIL_FROM:-}
       mail__transport: ${MAIL_TRANSPORT:-Direct}
       mail__options__host: ${MAIL_HOST:-}
       mail__options__port: ${MAIL_PORT:-}
